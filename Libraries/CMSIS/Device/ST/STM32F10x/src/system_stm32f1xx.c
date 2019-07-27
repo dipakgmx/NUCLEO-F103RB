@@ -174,28 +174,28 @@ const uint8_t APBPrescTable[8U] =  {0, 0, 0, 0, 1, 2, 3, 4};
   */
 void SystemInit (void)
 {
-  /* Reset the RCC clock configuration to the default reset state(for debug purpose) */
-  /* Set HSION bit */
-  RCC->CR |= 0x00000001U;
+    /* Reset the RCC clock configuration to the default reset state(for debug purpose) */
+    /* Set HSION bit */
+    RCC->CR |= 0x00000001U;
 
-  /* Reset SW, HPRE, PPRE1, PPRE2, ADCPRE and MCO bits */
+    /* Reset SW, HPRE, PPRE1, PPRE2, ADCPRE and MCO bits */
 #if !defined(STM32F105xC) && !defined(STM32F107xC)
-  RCC->CFGR &= 0xF8FF0000U;
+    RCC->CFGR &= 0xF8FF0000U;
 #else
-  RCC->CFGR &= 0xF0FF0000U;
-#endif /* STM32F105xC */   
-  
-  /* Reset HSEON, CSSON and PLLON bits */
-  RCC->CR &= 0xFEF6FFFFU;
+    RCC->CFGR &= 0xF0FF0000U;
+#endif /* STM32F105xC */
 
-  /* Reset HSEBYP bit */
-  RCC->CR &= 0xFFFBFFFFU;
+    /* Reset HSEON, CSSON and PLLON bits */
+    RCC->CR &= 0xFEF6FFFFU;
 
-  /* Reset PLLSRC, PLLXTPRE, PLLMUL and USBPRE/OTGFSPRE bits */
-  RCC->CFGR &= 0xFF80FFFFU;
+    /* Reset HSEBYP bit */
+    RCC->CR &= 0xFFFBFFFFU;
+
+    /* Reset PLLSRC, PLLXTPRE, PLLMUL and USBPRE/OTGFSPRE bits */
+    RCC->CFGR &= 0xFF80FFFFU;
 
 #if defined(STM32F105xC) || defined(STM32F107xC)
-  /* Reset PLL2ON and PLL3ON bits */
+    /* Reset PLL2ON and PLL3ON bits */
   RCC->CR &= 0xEBFFFFFFU;
 
   /* Disable all interrupts and clear pending bits  */
@@ -204,27 +204,62 @@ void SystemInit (void)
   /* Reset CFGR2 register */
   RCC->CFGR2 = 0x00000000U;
 #elif defined(STM32F100xB) || defined(STM32F100xE)
-  /* Disable all interrupts and clear pending bits  */
+    /* Disable all interrupts and clear pending bits  */
   RCC->CIR = 0x009F0000U;
 
   /* Reset CFGR2 register */
-  RCC->CFGR2 = 0x00000000U;      
+  RCC->CFGR2 = 0x00000000U;
 #else
-  /* Disable all interrupts and clear pending bits  */
-  RCC->CIR = 0x009F0000U;
+    /* Disable all interrupts and clear pending bits  */
+    RCC->CIR = 0x009F0000U;
 #endif /* STM32F105xC */
-    
+
+    // Next section copied from http://stefanfrings.de/stm32/stm32f1.html
+    // Allows setting the 36Mhz clock
+    // Because the debugger switches PLL on, we may
+    // need to switch back to the HSI oscillator without PLL
+
+    // Switch to HSI oscillator
+    MODIFY_REG(RCC->CFGR, RCC_CFGR_SW, RCC_CFGR_SW_HSI);
+
+    // Wait until the switch is done
+    while ((RCC->CFGR & RCC_CFGR_SWS_Msk) != RCC_CFGR_SWS_HSI) {}
+
+    // Disable the PLL, then we can configure it
+    CLEAR_BIT(RCC->CR, RCC_CR_PLLON);
+
+    // Flash latency 2 wait states
+    MODIFY_REG(FLASH->ACR, FLASH_ACR_LATENCY, FLASH_ACR_LATENCY_1);
+
+    // Enable HSE oscillator
+    SET_BIT(RCC->CR, RCC_CR_HSEON);
+
+    // Wait until HSE oscillator is ready
+    while(!READ_BIT(RCC->CR, RCC_CR_HSERDY)) {}
+
+    // 72 MHz using the 8 MHz HSE oscillator with 9x PLL, lowspeed I/O runs at 36 MHz
+    WRITE_REG(RCC->CFGR, RCC_CFGR_PLLSRC + RCC_CFGR_PLLMULL9 + RCC_CFGR_PPRE1_DIV2);
+
+    // Enable PLL
+    SET_BIT(RCC->CR, RCC_CR_PLLON);
+
+    // Wait until PLL is ready
+    while(!READ_BIT(RCC->CR, RCC_CR_PLLRDY)) {}
+
+    // Select PLL as clock source
+    MODIFY_REG(RCC->CFGR, RCC_CFGR_SW, RCC_CFGR_SW_PLL);
+
 #if defined(STM32F100xE) || defined(STM32F101xE) || defined(STM32F101xG) || defined(STM32F103xE) || defined(STM32F103xG)
-  #ifdef DATA_IN_ExtSRAM
-    SystemInit_ExtMemCtl(); 
+    #ifdef DATA_IN_ExtSRAM
+    SystemInit_ExtMemCtl();
   #endif /* DATA_IN_ExtSRAM */
-#endif 
+#endif
 
 #ifdef VECT_TAB_SRAM
-  SCB->VTOR = SRAM_BASE | VECT_TAB_OFFSET; /* Vector Table Relocation in Internal SRAM. */
+    SCB->VTOR = SRAM_BASE | VECT_TAB_OFFSET; /* Vector Table Relocation in Internal SRAM. */
 #else
-  SCB->VTOR = FLASH_BASE | VECT_TAB_OFFSET; /* Vector Table Relocation in Internal FLASH. */
-#endif 
+    SCB->VTOR = FLASH_BASE | VECT_TAB_OFFSET; /* Vector Table Relocation in Internal FLASH. */
+#endif
 }
 
 /**
