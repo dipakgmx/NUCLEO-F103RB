@@ -14,28 +14,35 @@ add_definitions(-D__weak=__attribute__\(\(weak\)\) -D__packed=__attribute__\(\(_
 
 file(GLOB_RECURSE CMSIS_SYSTEM  Libraries/CMSIS/Device/ST/STM32F10x/src/system_stm32f1xx.c)
 file(GLOB_RECURSE CMSIS_STARTUP Startup/startup_stm32f103xb.s)
-#file(GLOB_RECURSE HAL_SOURCES Libraries/STM32F1xx_HAL_Driver/src/*.c)
+#file(GLOB_RECURSE HAL_SOURCES Libraries/STM32F1xx_HAL_Driver/Application/*.c)
 
 include_directories(Libraries/CMSIS/Device/ST/STM32F10x/Include)
 include_directories(Libraries/CMSIS/Include)
 #include_directories(Libraries/STM32F1xx_HAL_Driver/inc)
 
-#Search for source files within "src" folder
-file(GLOB APP_SOURCES "src/*/*.cpp" )
+#Search for source files within "Application" folder
+file(GLOB APP_SOURCES "Application/*/src/" )
 
 #Loop through source files
-foreach( source_files ${APP_SOURCES} )
-    get_filename_component( ProjectId ${source_files} PATH)
+foreach( application_files ${APP_SOURCES} )
+    get_filename_component( ProjectId ${application_files} PATH)
 
     #Extract project name from folders
     string(FIND         ${ProjectId} "Exercise" slLoc)
-    string(LENGTH       ${ProjectId} endLoc)
-    string(SUBSTRING    ${ProjectId} ${slLoc} ${endLoc} NameForPrj)
+    string(FIND         ${ProjectId} "include"  endLoc)
+    string(SUBSTRING    ${ProjectId} ${slLoc} 12 ProjectName) #Fix the 12...need to figure out how to extract the project length
 
     #Set project name
-    project(${NameForPrj} C CXX ASM)
+    project(${ProjectName} C CXX ASM)
+    message(Building project ${ProjectName} )
 
-    set(SOURCE_FILES ${source_files} ${CMSIS_SYSTEM} ${CMSIS_STARTUP} ${LINKER_SCRIPT})
+    #Set application source files
+    file(GLOB APPLICATION_SRC Application/${ProjectName}/src/*.cpp)
+
+    #Set application include files
+    include_directories(APPLICATION_INCLUDE ${ProjectName}/include/)
+
+    set(SOURCE_FILES ${APPLICATION_SRC} ${CMSIS_SYSTEM} ${CMSIS_STARTUP} ${LINKER_SCRIPT})
     add_executable(${PROJECT_NAME}.elf ${SOURCE_FILES} ${LINKER_SCRIPT})
 
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--print-memory-usage,-Map=${PROJECT_BINARY_DIR}/${PROJECT_NAME}.map")
@@ -47,4 +54,4 @@ foreach( source_files ${APP_SOURCES} )
             COMMAND ${CMAKE_OBJCOPY} -Obinary $<TARGET_FILE:${PROJECT_NAME}.elf> ${BIN_FILE}
             COMMENT "Building ${HEX_FILE} Building ${BIN_FILE}")
 
-endforeach( source_files ${APP_SOURCES} )
+endforeach( application_files ${APP_SOURCES} )
